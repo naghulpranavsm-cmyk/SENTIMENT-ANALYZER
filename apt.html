@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LegalSent AI - Legal Document Sentiment Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .chat-container {
+            transition: all 0.3s ease;
+        }
+        .message {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .sentiment-positive {
+            background-color: rgba(16, 185, 129, 0.1);
+            border-left: 4px solid rgb(16, 185, 129);
+        }
+        .sentiment-negative {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid rgb(239, 68, 68);
+        }
+        .sentiment-neutral {
+            background-color: rgba(156, 163, 175, 0.1);
+            border-left: 4px solid rgb(156, 163, 175);
+        }
+        .upload-container {
+            border: 2px dashed #9CA3AF;
+            transition: all 0.3s ease;
+        }
+        .upload-container:hover {
+            border-color: #6B7280;
+            background-color: rgba(243, 244, 246, 0.5);
+        }
+        .analyze-btn {
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+        .analyze-btn:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header Section -->
+        <header class="flex flex-col md:flex-row items-center justify-between mb-8">
+            <div class="flex items-center mb-4 md:mb-0">
+                <div class="mr-4">
+                    <img src="https://placehold.co/60x60" alt="LegalSent AI logo - Scales of justice with AI circuit design overlay in blue and gold" class="rounded-full" />
+                </div>
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">LegalSent AI</h1>
+                    <p class="text-gray-600">Advanced Sentiment Analysis for Legal Documents</p>
+                </div>
+            </div>
+            <div class="flex space-x-4">
+                <button class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-medium">Docs</button>
+                <button class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium">API</button>
+                <button class="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium">Login</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Info Panel -->
+            <div class="lg:col-span-1 bg-white rounded-xl shadow-md p-6 h-fit">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">How It Works</h2>
+                <div class="space-y-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 bg-blue-100 text-blue-700 rounded-full p-2 mr-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-800">Upload Document</h3>
+                            <p class="text-gray-600 text-sm">Submit your legal document or paste text directly</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 bg-purple-100 text-purple-700 rounded-full p-2 mr-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-800">AI Analysis</h3>
+                            <p class="text-gray-600 text-sm">Our NLP models identify emotional tone and legal implications</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 bg-green-100 text-green-700 rounded-full p-2 mr-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-800">Get Insights</h3>
+                            <p class="text-gray-600 text-sm">Receive comprehensive sentiment breakdown and recommendations</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <h3 class="font-medium text-gray-800 mb-2">Document Types Supported</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Contracts</span>
+                        <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Court Opinions</span>
+                        <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Statutes</span>
+                        <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Pleadings</span>
+                        <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Depositions</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Interface -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-xl shadow-md overflow-hidden h-full flex flex-col">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h2 class="text-xl font-semibold text-gray-800">Legal Document Analysis</h2>
+                    </div>
+                    
+                    <!-- Chat Messages Container -->
+                    <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-4">
+                        <!-- Welcome message -->
+                        <div class="message flex">
+                            <div class="flex-shrink-0 mr-3">
+                                <img src="https://placehold.co/40x40" alt="LegalSent AI avatar - Professional legal AI assistant with friendly expression" class="rounded-full" />
+                            </div>
+                            <div class="flex-1">
+                                <div class="bg-blue-50 p-4 rounded-lg rounded-tl-none">
+                                    <p class="text-gray-800">Hello! I'm LegalSent AI, your automated legal document sentiment analyzer. You can upload a legal document or paste text for analysis. I'll identify emotional tone, potential biases, and highlight sections that may need special attention.</p>
+                                    <div class="mt-3">
+                                        <button class="text-sm bg-blue-600 text-white px-3 py-1 rounded-md mr-2 example-btn" data-text="The licensee shall not cause any harm to the licensor's reputation">Example Clause</button>
+                                        <button class="text-sm bg-blue-600 text-white px-3 py-1 rounded-md example-btn" data-text="Notwithstanding anything to the contrary, the terms herein shall be interpreted in the broadest possible manner">Legal Jargon</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Input Area -->
+                    <div class="p-4 border-t border-gray-200 bg-gray-50">
+                        <!-- Upload/Text Toggle -->
+                        <div class="flex mb-4 border-b border-gray-200">
+                            <button class="px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600" id="text-tab">Text Input</button>
+                            <button class="px-4 py-2 font-medium text-gray-500" id="upload-tab">Document Upload</button>
+                        </div>
+                        
+                        <!-- Text Input -->
+                        <div id="text-input-container">
+                            <textarea id="document-text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" rows="4" placeholder="Paste your legal document text here..."></textarea>
+                            <div class="flex justify-between items-center mt-3">
+                                <div class="flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="text-xs text-gray-500">All analysis is confidential</span>
+                                </div>
+                                <button id="analyze-text" class="analyze-btn px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">Analyze</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Upload Input (initially hidden) -->
+                        <div id="upload-container" class="hidden">
+                            <div class="upload-container rounded-lg p-8 text-center cursor-pointer mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                                <p class="text-gray-600 mb-1">Drag and drop your document here</p>
+                                <p class="text-gray-500 text-sm">or click to browse files</p>
+                                <input type="file" id="document-upload" class="hidden" />
+                            </div>
+                            <div class="flex justify-end">
+                                <button id="analyze-upload" class="analyze-btn px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 hidden">Analyze</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Analysis Results Modal (hidden initially) -->
+        <div id="results-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="text-xl font-semibold text-gray-800">Analysis Results</h2>
+                    <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    <!-- Summary Section -->
+                    <div class="mb-8">
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">Document Summary</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="p-2 rounded-full bg-blue-100 text-blue-600 mr-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-medium text-gray-800">Overall Sentiment</h4>
+                                        <p class="text-gray-600" id="overall-sentiment">Neutral</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-purple-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="p-2 rounded-full bg-purple-100 text-purple-600 mr-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-medium text-gray-800">Document Length</h4>
+                                        <p class="text-gray-600" id="document-length">0 words</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="p-2 rounded-full bg-green-100 text-green-600 mr-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-medium text-gray-800">Key Topics</h4>
+                                        <p class="text-gray-600" id="key-topics">None identified</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sentiment Chart Placeholder -->
+                        <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-medium text-gray-800">Sentiment Distribution</h4>
+                                <div class="flex space-x-2">
+                                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Positive</span>
+                                    <span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">Neutral</span>
+                                    <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">Negative</span>
+                                </div>
+                            </div>
+                            <div class="h-48 flex items-end space-x-1">
+                                <div class="flex-1 flex flex-col items-center">
+                                    <div class="w-full bg-green-200 rounded-t-sm" style="height: 60%"></div>
+                                    <p class="text-xs text-gray-500 mt-1">43%</p>
+                                </div>
+                                <div class="flex-1 flex flex-col items-center">
+                                    <div class="w-full bg-gray-200 rounded-t-sm" style="height: 30%"></div>
+                                    <p class="text-xs text-gray-500 mt-1">25%</p>
+                                </div>
+                                <div class="flex-1 flex flex-col items-center">
+                                    <div class="w-full bg-red-200 rounded-t-sm" style="height: 10%"></div>
+                                    <p class="text-xs text-gray-500 mt-1">32%</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Analysis -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">Detailed Analysis</h3>
+                        <div class="space-y-4" id="detailed-analysis">
+                            <!-- Example analysis items -->
+                            <div class="p-4 rounded-lg sentiment-positive">
+                                <div class="flex items-center mb-2">
+                                    <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                    <span class="text-sm font-medium text-green-700">Positive Sentiment</span>
+                                </div>
+                                <p class="text-gray-700 mb-2">"The parties agree to work collaboratively in good faith..."</p>
+                                <p class="text-xs text-gray-500">This clause shows cooperative intent between parties.</p>
+                            </div>
+                            <div class="p-4 rounded-lg sentiment-negative">
+                                <div class="flex items-center mb-2">
+                                    <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                                    <span class="text-sm font-medium text-red-700">Negative Sentiment</span>
+                                </div>
+                                <p class="text-gray-700 mb-2">"Failure to comply will result in immediate termination..."</p>
+                                <p class="text-xs text-gray-500">This clause contains strong punitive language.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end">
+                    <button class="px-6 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg font-medium mr-3">Download Report</button>
+                    <button class="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">Get Legal Review</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Tab switching
+            const textTab = document.getElementById('text-tab');
+            const uploadTab = document.getElementById('upload-tab');
+            const textInputContainer = document.getElementById('text-input-container');
+            const uploadContainer = document.getElementById('upload-container');
+            
+            textTab.addEventListener('click', function() {
+                textTab.classList.add('text-blue-600', 'border-blue-600');
+                textTab.classList.remove('text-gray-500');
+                uploadTab.classList.add('text-gray-500');
+                uploadTab.classList.remove('text-blue-600', 'border-blue-600');
+                
+                textInputContainer.classList.remove('hidden');
+                uploadContainer.classList.add('hidden');
+            });
+            
+            uploadTab.addEventListener('click', function() {
+                uploadTab.classList.add('text-blue-600', 'border-blue-600');
+                uploadTab.classList.remove('text-gray-500');
+                textTab.classList.add('text-gray-500');
+                textTab.classList.remove('text-blue-600', 'border-blue-600');
+                
+                uploadContainer.classList.remove('hidden');
+                textInputContainer.classList.add('hidden');
+            });
+            
+            // Document upload handling
+            const uploadArea = document.querySelector('.upload-container');
+            const fileInput = document.getElementById('document-upload');
+            const analyzeUploadBtn = document.getElementById('analyze-upload');
+            
+            uploadArea.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) {
+                    analyzeUploadBtn.classList.remove('hidden');
+                    uploadArea.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="text-gray-800 font-medium">${fileInput.files[0].name}</p>
+                        <p class="text-gray-500 text-sm">${(fileInput.files[0].size / 1024).toFixed(2)} KB</p>
+                    `;
+                }
+            });
+            
+            // Drag and drop handling
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('border-blue-400', 'bg-blue-50');
+            });
+            
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.classList.remove('border-blue-400', 'bg-blue-50');
+            });
+            
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('border-blue-400', 'bg-blue-50');
+                
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    analyzeUploadBtn.classList.remove('hidden');
+                    uploadArea.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="text-gray-800 font-medium">${fileInput.files[0].name}</p>
+                        <p class="text-gray-500 text-sm">${(fileInput.files[0].size / 1024).toFixed(2)} KB</p>
+                    `;
+                }
+            });
+            
+            // Example text buttons
+            const exampleButtons = document.querySelectorAll('.example-btn');
+            const documentText = document.getElementById('document-text');
+            
+            exampleButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    documentText.value = button.getAttribute('data-text');
+                });
+            });
+            
+            // Analysis handlers
+            const analyzeTextBtn = document.getElementById('analyze-text');
+            const chatMessages = document.getElementById('chat-messages');
+            const resultsModal = document.getElementById('results-modal');
+            const closeModalBtn = document.getElementById('close-modal');
+            
+            analyzeTextBtn.addEventListener('click', function() {
+                const text = documentText.value.trim();
+                if (text.length === 0) {
+                    alert('Please enter some text to analyze');
+                    return;
+                }
+                
+                showAnalyzingMessage();
+                
+                // Simulate analysis delay
+                setTimeout(function() {
+                    showAnalysisResults(text);
+                    resultsModal.classList.remove('hidden');
+                }, 2000);
+            });
+            
+            analyzeUploadBtn.addEventListener('click', function() {
+                showAnalyzingMessage();
+                
+                // Simulate analysis delay
+                setTimeout(function() {
+                    // Normally you would process the uploaded file here
+                    showAnalysisResults("Sample text from uploaded document");
+                    resultsModal.classList.remove('hidden');
+                }, 2000);
+            });
+            
+            function showAnalyzingMessage() {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message flex';
+                messageDiv.innerHTML = `
+                    <div class="flex-shrink-0 mr-3">
+                        <img src="https://placehold.co/40x40" alt="LegalSent AI avatar - Professional legal AI assistant with processing expression" class="rounded-full" />
+                    </div>
+                    <div class="flex-1">
+                        <div class="bg-blue-50 p-4 rounded-lg rounded-tl-none">
+                            <p class="text-gray-800">Analyzing document... Processing legal terminology and evaluating sentiment patterns.</p>
+                            <div class="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-500 rounded-full animate-pulse" style="width: 80%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            function showAnalysisResults(text) {
+                // Update modal with sample analysis
+                document.getElementById('overall-sentiment').textContent = getSentimentLabel(text);
+                document.getElementById('document-length').textContent = `${text.split(' ').length} words`;
+                
+                // Show chatbot response
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message flex';
+                messageDiv.innerHTML = `
+                    <div class="flex-shrink-0 mr-3">
+                        <img src="https://placehold.co/40x40" alt="LegalSent AI avatar - Professional legal AI assistant showing completed analysis" class="rounded-full" />
+                    </div>
+                    <div class="flex-1">
+                        <div class="bg-blue-50 p-4 rounded-lg rounded-tl-none">
+                            <p class="text-gray-800">Analysis complete! I've processed your legal document and identified key sentiment markers. <button class="text-blue-600 underline see-results-link">See full analysis</button></p>
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                // Add event listener to the new button
+                messageDiv.querySelector('.see-results-link').addEventListener('click', function() {
+                    resultsModal.classList.remove('hidden');
+                });
+            }
+            
+            function getSentimentLabel(text) {
+                // Simple sentiment analysis for demo purposes
+                const positiveWords = ['agree', 'collaborate', 'mutual', 'benefit', 'partnership'];
+                const negativeWords = ['terminate', 'failure', 'penalty', 'breach', 'damages'];
+                
+                const textLower = text.toLowerCase();
+                const positiveCount = positiveWords.filter(word => textLower.includes(word)).length;
+                const negativeCount = negativeWords.filter(word => textLower.includes(word)).length;
+                
+                if (positiveCount > negativeCount && positiveCount > 2) return 'Positive';
+                if (negativeCount > positiveCount && negativeCount > 2) return 'Negative';
+                return 'Neutral';
+            }
+            
+            // Modal closing
+            closeModalBtn.addEventListener('click', function() {
+                resultsModal.classList.add('hidden');
+            });
+            
+            window.addEventListener('click', function(e) {
+                if (e.target === resultsModal) {
+                    resultsModal.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
