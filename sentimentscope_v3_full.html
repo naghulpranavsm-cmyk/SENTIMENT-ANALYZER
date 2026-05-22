@@ -1,0 +1,453 @@
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{0%,100%{opacity:.25;transform:scale(.75)}50%{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes barGrow{from{width:0}to{width:var(--w)}}
+.fu{animation:fadeUp .35s ease both}
+textarea,input,button{font-family:var(--font-sans)}
+textarea:focus,input:focus{outline:none;box-shadow:0 0 0 2px rgba(232,93,4,.5)}
+</style>
+
+<h2 class="sr-only">SentimentScope — AI sentiment analysis website with hero landing page and live analytics dashboard</h2>
+
+<div id="root" style="border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary)"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const BK='#111111';
+const OR='#E85D04';
+const OR2='#F48C06';
+const WH='#FFFFFF';
+const GR='#1e1e1e';
+const GR2='#2a2a2a';
+const MUTED='rgba(255,255,255,0.45)';
+const BORDER='rgba(255,255,255,0.1)';
+
+const SC={
+  positive:{accent:'#22c55e',fill:'rgba(34,197,94,0.12)',stroke:'rgba(34,197,94,0.35)',label:'Positive',icon:'ti-mood-smile'},
+  negative:{accent:'#ef4444',fill:'rgba(239,68,68,0.12)',stroke:'rgba(239,68,68,0.35)',label:'Negative',icon:'ti-mood-sad'},
+  neutral: {accent:'#94a3b8',fill:'rgba(148,163,184,0.12)',stroke:'rgba(148,163,184,0.35)',label:'Neutral',icon:'ti-mood-empty'},
+  mixed:   {accent:OR2,fill:'rgba(244,140,6,0.12)',stroke:'rgba(244,140,6,0.35)',label:'Mixed',icon:'ti-mood-confuzed'},
+};
+
+const EXAMPLES=["I just got the promotion I worked so hard for!","Today feels impossibly heavy and hopeless.","The report is due by end of Friday.","Excited about the move but scared of failing."];
+
+const PROMPT=`You are a Sentiment Analysis AI. Respond ONLY in this exact JSON (no markdown, no extra text):
+{"sentiment":"positive"|"negative"|"neutral"|"mixed","score":<-1.0 to 1.0>,"emotions":["e1","e2"],"intensity":"low"|"medium"|"high","reply":"<warm empathetic reply>","keywords":["w1","w2","w3"]}`;
+
+let S={screen:'home',user:null,chats:[],activeId:null,hist:[],loading:false,tab:'chat',input:''};
+
+const DB={
+  users:[],chats:[],
+  reg(n,e,p){if(this.users.find(u=>u.email===e))throw new Error('Email already in use.');const u={id:''+Date.now(),name:n,email:e,pass:p};this.users.push(u);return u;},
+  login(e,p){const u=this.users.find(u=>u.email===e&&u.pass===p);if(!u)throw new Error('Wrong email or password.');return u;},
+  chatsFor(uid){return this.chats.filter(c=>c.uid===uid).sort((a,b)=>b.ts-a.ts);},
+  getChat(id,uid){return this.chats.find(c=>c.id===id&&c.uid===uid);},
+  newChat(uid){const c={id:''+Date.now(),uid,title:'',msgs:[],ts:Date.now()};this.chats.push(c);return c;},
+  addMsg(cid,uid,m){const c=this.getChat(cid,uid);if(!c)return;c.msgs.push(m);c.title=c.title||m.txt.slice(0,40);c.ts=Date.now();},
+  del(id,uid){this.chats=this.chats.filter(c=>!(c.id===id&&c.uid===uid));},
+  stats(uid){
+    const all=this.chatsFor(uid).flatMap(c=>c.msgs);
+    const bd={positive:0,negative:0,neutral:0,mixed:0};const em={};let ss=0;
+    for(const m of all){bd[m.sentiment]=(bd[m.sentiment]||0)+1;ss+=m.score||0;for(const e of m.emotions||[])em[e]=(em[e]||0)+1;}
+    return{total:this.chatsFor(uid).length,msgs:all.length,avg:all.length?(ss/all.length):0,bd,em:Object.entries(em).sort((a,b)=>b[1]-a[1]).slice(0,6),timeline:all.slice(-8).map((m,i)=>({i,s:m.score}))};
+  }
+};
+
+function h(t,a,...c){
+  const el=document.createElement(t);
+  if(a)for(const[k,v]of Object.entries(a)){
+    if(k==='style'&&typeof v==='object')Object.assign(el.style,v);
+    else if(k.startsWith('on'))el.addEventListener(k.slice(2).toLowerCase(),v);
+    else el.setAttribute(k,v);
+  }
+  for(const ch of c.flat(9))if(ch!=null)el.append(typeof ch==='string'?document.createTextNode(ch):ch);
+  return el;
+}
+function ic(n,s=15,col='inherit'){const i=document.createElement('i');i.className=`ti ${n}`;i.style.fontSize=s+'px';if(col!=='inherit')i.style.color=col;i.setAttribute('aria-hidden','true');return i;}
+function set(u){Object.assign(S,u);render();}
+
+function renderHome(){
+  const nav=h('div',{style:{display:'flex',alignItems:'center',gap:'12px',padding:'14px 24px',background:BK,borderBottom:`1px solid ${BORDER}`}},
+    h('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},
+      h('div',{style:{width:'30px',height:'30px',borderRadius:'8px',background:OR,display:'flex',alignItems:'center',justifyContent:'center',color:WH}},ic('ti-chart-dots',16,WH)),
+      h('span',{style:{color:WH,fontWeight:'500',fontSize:'15px',letterSpacing:'-.01em'}},'SentimentScope'),
+    ),
+    h('div',{style:{flex:1}}),
+    h('button',{style:{padding:'7px 16px',borderRadius:'8px',border:`1px solid ${BORDER}`,background:'transparent',color:MUTED,fontSize:'12px',cursor:'pointer',marginRight:'8px'},onClick(){set({screen:'login'});}}, 'Sign in'),
+    h('button',{style:{padding:'7px 16px',borderRadius:'8px',border:'none',background:OR,color:WH,fontSize:'12px',fontWeight:'500',cursor:'pointer'},onClick(){set({screen:'register'});}}, 'Get started'),
+  );
+
+  const hero=h('div',{style:{background:BK,padding:'48px 32px 40px',display:'flex',alignItems:'center',gap:'32px',minHeight:'220px',position:'relative',overflow:'hidden'}},
+    h('div',{style:{position:'absolute',top:0,left:0,right:0,bottom:0,background:`linear-gradient(135deg, ${OR} 0%, transparent 55%)`,opacity:.08}}),
+    h('div',{style:{flex:1,position:'relative',zIndex:1}},
+      h('div',{style:{display:'inline-flex',alignItems:'center',gap:'6px',padding:'4px 12px',borderRadius:'20px',background:'rgba(232,93,4,0.15)',border:`1px solid rgba(232,93,4,0.3)`,marginBottom:'16px'}},
+        h('div',{style:{width:'5px',height:'5px',borderRadius:'50%',background:OR,animation:'pulse 2s ease infinite'}}),
+        h('span',{style:{fontSize:'11px',color:OR,letterSpacing:'.06em'}},'POWERED BY CLAUDE AI'),
+      ),
+      h('div',{style:{fontSize:'36px',fontWeight:'500',color:WH,lineHeight:'1.1',marginBottom:'10px',letterSpacing:'-.02em'}},'Sentiment'),
+      h('div',{style:{fontSize:'36px',fontWeight:'500',color:OR,lineHeight:'1.1',marginBottom:'16px',letterSpacing:'-.02em'}},'Analysis'),
+      h('div',{style:{fontSize:'13px',color:MUTED,lineHeight:'1.7',maxWidth:'340px',marginBottom:'24px'}},'Decode the emotional weight of any text instantly. Understand sentiment, detect emotions, and visualize insights in real time.'),
+      h('div',{style:{display:'flex',gap:'10px',flexWrap:'wrap'}},
+        h('button',{style:{padding:'10px 22px',borderRadius:'9px',border:'none',background:OR,color:WH,fontSize:'13px',fontWeight:'500',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'},onClick(){set({screen:'register'});}},ic('ti-sparkles',14,WH),'Start analyzing free'),
+        h('button',{style:{padding:'10px 22px',borderRadius:'9px',border:`1px solid ${BORDER}`,background:'transparent',color:MUTED,fontSize:'13px',cursor:'pointer'},onClick(){set({screen:'login'});}}, 'Sign in'),
+      ),
+    ),
+    h('div',{style:{flexShrink:0,display:'flex',flexDirection:'column',gap:'10px',position:'relative',zIndex:1}},
+      ...['Positive +0.87','Negative −0.71','Neutral ±0.04','Mixed ±0.38'].map((t,i)=>{
+        const cols=[SC.positive,SC.negative,SC.neutral,SC.mixed];
+        const c=cols[i];
+        return h('div',{style:{display:'flex',alignItems:'center',gap:'10px',padding:'10px 14px',borderRadius:'10px',background:GR2,border:`1px solid ${c.stroke}`,minWidth:'180px'}},
+          h('div',{style:{width:'28px',height:'28px',borderRadius:'7px',background:c.fill,border:`1px solid ${c.stroke}`,display:'flex',alignItems:'center',justifyContent:'center'}},ic(c.icon,14,c.accent)),
+          h('span',{style:{fontSize:'12px',color:WH,flex:1}},t.split(' ')[0]),
+          h('span',{style:{fontSize:'12px',fontWeight:'500',color:c.accent,fontVariantNumeric:'tabular-nums'}},t.split(' ')[1]),
+        );
+      }),
+    ),
+  );
+
+  const features=[
+    {icon:'ti-bolt',title:'Real-time AI analysis',desc:'Claude AI scores every message in under a second.',col:OR},
+    {icon:'ti-chart-area-line',title:'Visual insights',desc:'Live charts, trend lines, and sentiment dashboards.',col:'#22c55e'},
+    {icon:'ti-history',title:'Session history',desc:'Revisit, compare and track emotional patterns over time.',col:'#7F77DD'},
+    {icon:'ti-brain',title:'Emotion detection',desc:'Joy, fear, anger, trust — 8 nuanced emotion types identified.',col:OR2},
+  ];
+  const feats=h('div',{style:{background:'#161616',padding:'28px 24px'}},
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'12px'}},
+      ...features.map(f=>h('div',{style:{padding:'16px',borderRadius:'10px',background:GR2,border:`1px solid ${BORDER}`}},
+        h('div',{style:{width:'32px',height:'32px',borderRadius:'8px',background:`${f.col}18`,border:`1px solid ${f.col}44`,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px'}},ic(f.icon,16,f.col)),
+        h('div',{style:{fontSize:'12px',fontWeight:'500',color:WH,marginBottom:'5px'}},f.title),
+        h('div',{style:{fontSize:'11px',color:MUTED,lineHeight:'1.6'}},f.desc),
+      )),
+    ),
+  );
+
+  return h('div',{style:{background:BK,display:'flex',flexDirection:'column'}},nav,hero,feats);
+}
+
+function renderAuth(isLogin){
+  let nv='',ev='',pv='',cv='';
+  const errEl=h('div',{style:{display:'none',padding:'8px 12px',borderRadius:'8px',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.35)',color:'#fca5a5',fontSize:'12px',marginBottom:'12px'}});
+  function fld(lbl,typ,ph,cb){
+    return h('div',{style:{marginBottom:'12px'}},
+      h('label',{style:{display:'block',fontSize:'11px',color:MUTED,marginBottom:'5px',letterSpacing:'.05em'}},lbl),
+      h('input',{type:typ,placeholder:ph,style:{width:'100%',padding:'9px 12px',borderRadius:'8px',border:`1px solid ${BORDER}`,background:GR2,color:WH,fontSize:'13px'},onInput:e=>cb(e.target.value)}),
+    );
+  }
+  return h('div',{style:{background:BK,minHeight:'500px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'32px'}},
+    h('div',{class:'fu',style:{width:'100%',maxWidth:'340px'}},
+      h('div',{style:{textAlign:'center',marginBottom:'24px'}},
+        h('div',{style:{width:'40px',height:'40px',borderRadius:'10px',background:OR,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}},ic('ti-chart-dots',20,WH)),
+        h('div',{style:{fontSize:'16px',fontWeight:'500',color:WH,marginBottom:'4px'}},isLogin?'Welcome back':'Create account'),
+        h('div',{style:{fontSize:'12px',color:MUTED}},isLogin?'Sign in to your account':'Start analyzing sentiment for free'),
+      ),
+      h('div',{style:{background:GR,border:`1px solid ${BORDER}`,borderRadius:'12px',padding:'22px'}},
+        errEl,
+        isLogin?null:fld('Full name','text','Jane Smith',v=>nv=v),
+        fld('Email','email','you@example.com',v=>ev=v),
+        fld('Password','password',isLogin?'••••••••':'At least 6 characters',v=>pv=v),
+        isLogin?null:fld('Confirm password','password','••••••••',v=>cv=v),
+        h('button',{style:{width:'100%',padding:'10px',borderRadius:'9px',border:'none',background:OR,color:WH,fontSize:'13px',fontWeight:'500',cursor:'pointer',marginTop:'4px'},
+          onClick(){
+            errEl.style.display='none';
+            try{
+              if(!ev||!pv)throw new Error('Fill in all fields.');
+              if(!isLogin&&pv.length<6)throw new Error('Password needs 6+ characters.');
+              if(!isLogin&&pv!==cv)throw new Error('Passwords don\'t match.');
+              if(!isLogin&&!nv.trim())throw new Error('Name is required.');
+              const u=isLogin?DB.login(ev,pv):DB.reg(nv.trim(),ev,pv);
+              set({user:u,screen:'dashboard',input:''});
+            }catch(e){errEl.textContent=e.message;errEl.style.display='block';}
+          }
+        },isLogin?'Sign in':'Create account'),
+        h('div',{style:{textAlign:'center',marginTop:'14px',fontSize:'12px',color:MUTED}},
+          isLogin?'No account? ':'Have an account? ',
+          h('a',{href:'#',style:{color:OR},onClick(e){e.preventDefault();set({screen:isLogin?'register':'login'});}},isLogin?'Register':'Sign in'),
+        ),
+      ),
+      h('button',{style:{marginTop:'14px',background:'none',border:'none',color:MUTED,fontSize:'12px',cursor:'pointer',width:'100%'},onClick(){set({screen:'home'});}},
+        ic('ti-arrow-left',12),' Back to home',
+      ),
+    ),
+  );
+}
+
+function renderSentCard(m){
+  const c=SC[m.sentiment]||SC.neutral;
+  const pct=((m.score+1)/2*100);
+  const iw={low:'28%',medium:'62%',high:'100%'}[m.intensity]||'50%';
+  return h('div',{class:'fu',style:{padding:'12px 14px',borderRadius:'10px',background:c.fill,border:`1px solid ${c.stroke}`,marginTop:'6px'}},
+    h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+        h('div',{style:{width:'22px',height:'22px',borderRadius:'6px',background:`${c.accent}22`,border:`1px solid ${c.stroke}`,display:'flex',alignItems:'center',justifyContent:'center'}},ic(c.icon,12,c.accent)),
+        h('span',{style:{fontSize:'11px',fontWeight:'500',padding:'2px 9px',borderRadius:'20px',background:`${c.accent}20`,border:`1px solid ${c.stroke}`,color:c.accent}},c.label),
+      ),
+      h('span',{style:{fontSize:'12px',fontWeight:'500',color:c.accent,fontVariantNumeric:'tabular-nums'}},(m.score>=0?'+':'')+Number(m.score).toFixed(2)),
+    ),
+    h('div',{style:{marginBottom:'8px'}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:'3px'}},
+        h('span',{style:{fontSize:'10px',color:c.accent,opacity:.6}},'neg'),
+        h('span',{style:{fontSize:'10px',color:c.accent,opacity:.6}},'pos'),
+      ),
+      h('div',{style:{height:'5px',background:'rgba(255,255,255,0.08)',borderRadius:'3px',overflow:'hidden',position:'relative'}},
+        h('div',{style:{position:'absolute',left:'50%',top:0,width:'1px',height:'100%',background:'rgba(255,255,255,0.2)'}}),
+        h('div',{style:{position:'absolute',left:m.score>=0?'50%':`${pct}%`,width:m.score>=0?`${pct-50}%`:`${50-pct}%`,height:'100%',background:c.accent,borderRadius:'3px'}}),
+      ),
+    ),
+    h('div',{style:{marginBottom:'8px'}},
+      h('div',{style:{fontSize:'10px',color:c.accent,opacity:.6,marginBottom:'3px'}},'Intensity — '+m.intensity),
+      h('div',{style:{height:'3px',background:'rgba(255,255,255,0.08)',borderRadius:'2px',overflow:'hidden'}},
+        h('div',{style:{width:iw,height:'100%',background:c.accent,borderRadius:'2px'}}),
+      ),
+    ),
+    m.emotions?.length?h('div',{style:{marginBottom:'7px',display:'flex',flexWrap:'wrap',gap:'4px'}},
+      h('div',{style:{width:'100%',fontSize:'10px',color:c.accent,opacity:.6,marginBottom:'3px'}},'Emotions'),
+      ...m.emotions.map(e=>h('span',{style:{fontSize:'10px',padding:'2px 8px',borderRadius:'20px',background:`${c.accent}15`,border:`1px solid ${c.stroke}`,color:c.accent}},e)),
+    ):null,
+    m.keywords?.length?h('div',{style:{display:'flex',flexWrap:'wrap',gap:'4px'}},
+      h('div',{style:{width:'100%',fontSize:'10px',color:c.accent,opacity:.6,marginBottom:'3px'}},'Key signals'),
+      ...m.keywords.map(k=>h('span',{style:{fontSize:'10px',padding:'2px 8px',borderRadius:'4px',background:`${c.accent}15`,border:`1px solid ${c.stroke}`,color:c.accent,fontStyle:'italic'}},`"${k}"`)),
+    ):null,
+  );
+}
+
+function renderSidebar(){
+  const chats=DB.chatsFor(S.user?.id||'');
+  const fmt=ts=>{const d=new Date(ts),n=new Date(),dd=Math.floor((n-d)/86400000);return dd===0?'Today':dd===1?'Yesterday':dd+'d ago';};
+  const list=h('div',{style:{flex:1,overflowY:'auto'}});
+  if(!chats.length){list.appendChild(h('div',{style:{padding:'20px 8px',textAlign:'center',fontSize:'11px',color:MUTED,lineHeight:'1.7'}},'No sessions yet.\nStart a new analysis.'));}
+  for(const ch of chats){
+    const lm=ch.msgs[ch.msgs.length-1];
+    const c=lm?(SC[lm.sentiment]||SC.neutral):SC.neutral;
+    const active=S.activeId===ch.id;
+    const row=h('div',{style:{display:'flex',alignItems:'flex-start',gap:'7px',padding:'8px',borderRadius:'8px',marginBottom:'2px',cursor:'pointer',background:active?GR2:'transparent',border:active?`1px solid ${c.stroke}`:'1px solid transparent',transition:'all .15s'},
+      onClick(){set({activeId:ch.id,hist:ch.msgs.flatMap(m=>[{role:'user',content:m.txt},{role:'assistant',content:JSON.stringify(m)}]),tab:'chat'});}},
+      h('div',{style:{width:'22px',height:'22px',borderRadius:'6px',background:c.fill,border:`1px solid ${c.stroke}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:'1px'}},ic(c.icon,11,c.accent)),
+      h('div',{style:{flex:1,minWidth:0}},
+        h('div',{style:{fontSize:'11px',fontWeight:active?'500':'400',color:WH,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:'1px'}},ch.title||'New chat'),
+        h('div',{style:{fontSize:'10px',color:MUTED}},fmt(ch.ts)+' · '+ch.msgs.length+'msg'),
+      ),
+      h('button',{style:{background:'none',border:'none',cursor:'pointer',color:MUTED,fontSize:'15px',lineHeight:1,padding:'1px 3px',flexShrink:0},
+        onClick(e){e.stopPropagation();DB.del(ch.id,S.user.id);if(S.activeId===ch.id)set({activeId:null,hist:[]});else set({});}
+      },'×'),
+    );
+    list.appendChild(row);
+  }
+  return h('div',{style:{width:'190px',flexShrink:0,display:'flex',flexDirection:'column',borderRight:`1px solid ${BORDER}`,padding:'10px',gap:'8px',overflow:'hidden',background:GR}},
+    h('button',{style:{width:'100%',padding:'8px 10px',borderRadius:'8px',border:`1px solid rgba(232,93,4,.4)`,background:'rgba(232,93,4,.1)',color:OR,fontSize:'12px',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px',fontWeight:'500'},
+      onClick(){set({activeId:null,hist:[],tab:'chat'});}
+    },ic('ti-plus',12,OR),'New analysis'),
+    list,
+    h('div',{style:{borderTop:`1px solid ${BORDER}`,paddingTop:'8px',display:'flex',alignItems:'center',justifyContent:'space-between'}},
+      h('span',{style:{fontSize:'10px',color:MUTED}},chats.length+' sessions'),
+      h('div',{style:{display:'flex',alignItems:'center',gap:'4px'}},
+        h('div',{style:{width:'5px',height:'5px',borderRadius:'50%',background:'#22c55e',animation:'pulse 2s ease infinite'}}),
+        h('span',{style:{fontSize:'10px',color:'#22c55e'}},'live'),
+      ),
+    ),
+  );
+}
+
+function renderChat(){
+  const chat=S.activeId?DB.getChat(S.activeId,S.user.id):null;
+  const msgs=chat?chat.msgs:[];
+  const feed=h('div',{style:{flex:1,overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:'14px'}});
+
+  if(!msgs.length){
+    feed.appendChild(h('div',{class:'fu',style:{textAlign:'center',marginTop:'24px'}},
+      h('div',{style:{width:'48px',height:'48px',borderRadius:'14px',background:'rgba(232,93,4,.1)',border:'1px solid rgba(232,93,4,.3)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}},ic('ti-sparkles',22,OR)),
+      h('div',{style:{fontSize:'15px',fontWeight:'500',color:WH,marginBottom:'5px'}},'What are you feeling?'),
+      h('div',{style:{fontSize:'12px',color:MUTED,lineHeight:'1.6',marginBottom:'16px'}},'Share a thought — I\'ll decode its emotional weight.'),
+      h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px',justifyContent:'center'}},
+        ...EXAMPLES.map(ex=>h('button',{style:{padding:'6px 12px',borderRadius:'20px',border:`1px solid ${BORDER}`,background:GR2,color:MUTED,fontSize:'11px',cursor:'pointer'},
+          onClick(){inputTA.value=ex;S.input=ex;}
+        },ex)),
+      ),
+    ));
+  }
+
+  for(const m of msgs){
+    feed.appendChild(h('div',{class:'fu',style:{display:'flex',justifyContent:'flex-end'}},
+      h('div',{style:{maxWidth:'72%',padding:'10px 14px',background:`rgba(232,93,4,.15)`,border:`1px solid rgba(232,93,4,.3)`,borderRadius:'14px 14px 4px 14px',color:WH,fontSize:'13px',lineHeight:'1.6'}},m.txt),
+    ));
+    const c=SC[m.sentiment]||SC.neutral;
+    feed.appendChild(h('div',{class:'fu',style:{display:'flex',gap:'8px',alignItems:'flex-start'}},
+      h('div',{style:{width:'28px',height:'28px',borderRadius:'8px',background:c.fill,border:`1px solid ${c.stroke}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:'2px'}},ic(c.icon,14,c.accent)),
+      h('div',{style:{flex:1,maxWidth:'80%'}},
+        h('div',{style:{padding:'10px 14px',background:GR2,border:`1px solid ${BORDER}`,borderRadius:'3px 14px 14px 14px',color:WH,fontSize:'13px',lineHeight:'1.6',marginBottom:'4px'}},m.reply),
+        renderSentCard(m),
+      ),
+    ));
+  }
+  if(S.loading){
+    feed.appendChild(h('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
+      h('div',{style:{width:'28px',height:'28px',borderRadius:'8px',background:GR2,border:`1px solid ${BORDER}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},
+        h('div',{style:{width:'13px',height:'13px',borderRadius:'50%',border:'1.5px solid rgba(255,255,255,.15)',borderTopColor:OR,animation:'spin .7s linear infinite'}}),
+      ),
+      h('div',{style:{padding:'10px 14px',background:GR2,border:`1px solid ${BORDER}`,borderRadius:'3px 14px 14px 14px',display:'flex',gap:'4px'}},
+        ...[0,1,2].map(i=>h('div',{style:{width:'6px',height:'6px',borderRadius:'50%',background:OR,opacity:.4,animation:`blink 1.2s ease ${i*.22}s infinite`}})),
+      ),
+    ));
+  }
+  setTimeout(()=>{feed.scrollTop=feed.scrollHeight;},40);
+
+  const inputTA=h('textarea',{placeholder:'Analyze the sentiment of any text…',rows:'1',style:{flex:1,background:'transparent',border:'none',outline:'none',color:WH,fontSize:'13px',lineHeight:'1.55',resize:'none',minHeight:'20px',maxHeight:'100px',overflow:'auto'},
+    onInput(e){e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,100)+'px';S.input=e.target.value;},
+    onKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}},
+  });
+
+  async function send(){
+    const txt=S.input.trim();
+    if(!txt||S.loading)return;
+    inputTA.value='';inputTA.style.height='auto';S.input='';
+    set({loading:true});
+    let cid=S.activeId;
+    if(!cid){const nc=DB.newChat(S.user.id);cid=nc.id;S.activeId=cid;}
+    const nh=[...S.hist,{role:'user',content:txt}];
+    try{
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,system:PROMPT,messages:nh})});
+      const d=await r.json();
+      const raw=d.content?.map(b=>b.text||'').join('')||'{}';
+      let p;try{p=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch{p={sentiment:'neutral',score:0,emotions:[],intensity:'low',reply:raw,keywords:[]};}
+      DB.addMsg(cid,S.user.id,{txt,...p});
+      S.hist=[...nh,{role:'assistant',content:raw}];
+      set({loading:false,activeId:cid});
+    }catch(e){
+      DB.addMsg(cid,S.user.id,{txt,sentiment:'neutral',score:0,emotions:[],intensity:'low',reply:'Connection error — please try again.',keywords:[]});
+      set({loading:false,activeId:cid});
+    }
+  }
+
+  return h('div',{style:{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}},
+    feed,
+    h('div',{style:{padding:'10px 16px 14px',borderTop:`1px solid ${BORDER}`,background:GR}},
+      h('div',{style:{display:'flex',gap:'8px',alignItems:'flex-end',background:GR2,border:`1px solid ${BORDER}`,borderRadius:'10px',padding:'8px 10px'}},
+        inputTA,
+        h('button',{style:{width:'32px',height:'32px',borderRadius:'8px',border:'none',background:OR,color:WH,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},onClick:send},ic('ti-send',14,WH)),
+      ),
+      h('div',{style:{textAlign:'center',marginTop:'5px',fontSize:'10px',color:MUTED}},'Enter to send · Shift+Enter for new line'),
+    ),
+  );
+}
+
+function renderDashStats(){
+  const st=DB.stats(S.user.id);
+  const total=Object.values(st.bd).reduce((a,b)=>a+b,0)||1;
+
+  const metCards=[
+    {label:'Results',val:st.msgs,sub:`${st.total} sessions`,col:'#22c55e'},
+    {label:'Positive',val:Math.round(st.bd.positive/total*100)+'%',sub:'sentiment',col:'#22c55e'},
+    {label:'Negative',val:Math.round(st.bd.negative/total*100)+'%',sub:'sentiment',col:'#ef4444'},
+    {label:'Net sentiment',val:(st.avg>=0?'+':'')+Number(st.avg).toFixed(1),sub:'average score',col:st.avg>=0?'#22c55e':'#ef4444'},
+  ];
+
+  const statsArea=h('div',{style:{flex:1,overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:'14px'}},
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:'10px'}},
+      ...metCards.map(c=>h('div',{style:{padding:'14px',borderRadius:'10px',background:GR2,border:`1px solid ${BORDER}`}},
+        h('div',{style:{fontSize:'11px',color:MUTED,marginBottom:'6px',letterSpacing:'.03em'}},c.label),
+        h('div',{style:{fontSize:'22px',fontWeight:'500',color:c.col,fontVariantNumeric:'tabular-nums',marginBottom:'2px'}},c.val),
+        h('div',{style:{fontSize:'10px',color:MUTED}},c.sub),
+      )),
+    ),
+
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}},
+      h('div',{style:{padding:'14px',borderRadius:'10px',background:GR2,border:`1px solid ${BORDER}`}},
+        h('div',{style:{fontSize:'12px',fontWeight:'500',color:WH,marginBottom:'12px'}},'Sentiment over time'),
+        st.msgs===0?h('div',{style:{textAlign:'center',padding:'20px',fontSize:'12px',color:MUTED}},'No data yet — start chatting!'):
+        h('div',{style:{position:'relative',height:'120px'}},
+          h('canvas',{id:'timelineChart','aria-label':'Sentiment score over time','role':'img'}),
+        ),
+      ),
+      h('div',{style:{padding:'14px',borderRadius:'10px',background:GR2,border:`1px solid ${BORDER}`}},
+        h('div',{style:{fontSize:'12px',fontWeight:'500',color:WH,marginBottom:'12px'}},'Share of sentiment'),
+        st.msgs===0?h('div',{style:{textAlign:'center',padding:'20px',fontSize:'12px',color:MUTED}},'No data yet — start chatting!'):
+        h('div',null,
+          h('div',{style:{position:'relative',height:'120px'}},
+            h('canvas',{id:'donutChart','aria-label':'Share of sentiment by type','role':'img'}),
+          ),
+          h('div',{style:{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'8px',justifyContent:'center'}},
+            ...Object.entries(st.bd).map(([s,v])=>h('div',{style:{display:'flex',alignItems:'center',gap:'4px',fontSize:'10px',color:MUTED}},
+              h('div',{style:{width:'8px',height:'8px',borderRadius:'2px',background:SC[s].accent}}),
+              s+' '+Math.round(v/total*100)+'%',
+            )),
+          ),
+        ),
+      ),
+    ),
+
+    st.em.length?h('div',{style:{padding:'14px',borderRadius:'10px',background:GR2,border:`1px solid ${BORDER}`}},
+      h('div',{style:{fontSize:'12px',fontWeight:'500',color:WH,marginBottom:'10px'}},'Emotion frequency'),
+      h('div',{style:{display:'flex',flexDirection:'column',gap:'6px'}},
+        ...st.em.map(([e,v])=>{
+          const maxV=st.em[0][1]||1;
+          return h('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},
+            h('span',{style:{fontSize:'11px',color:MUTED,width:'70px',flexShrink:0,textTransform:'capitalize'}},e),
+            h('div',{style:{flex:1,height:'5px',background:'rgba(255,255,255,.06)',borderRadius:'3px',overflow:'hidden'}},
+              h('div',{style:{width:Math.round(v/maxV*100)+'%',height:'100%',background:OR,borderRadius:'3px'}}),
+            ),
+            h('span',{style:{fontSize:'10px',color:MUTED,width:'18px',textAlign:'right',fontVariantNumeric:'tabular-nums'}},v),
+          );
+        }),
+      ),
+    ):null,
+  );
+
+  setTimeout(()=>{
+    if(st.msgs>0&&st.timeline.length){
+      const tlEl=document.getElementById('timelineChart');
+      if(tlEl&&window.Chart){
+        new Chart(tlEl,{type:'line',data:{labels:st.timeline.map((_,i)=>'#'+(i+1)),datasets:[{label:'Score',data:st.timeline.map(t=>Number(t.s.toFixed(2))),borderColor:OR,backgroundColor:'rgba(232,93,4,.08)',tension:.4,fill:true,pointRadius:3,pointBackgroundColor:OR,borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:MUTED,font:{size:10}},grid:{color:'rgba(255,255,255,.05)'}},y:{min:-1,max:1,ticks:{color:MUTED,font:{size:10},stepSize:.5},grid:{color:'rgba(255,255,255,.05)'}}}}});
+      }
+      const doEl=document.getElementById('donutChart');
+      if(doEl&&window.Chart){
+        new Chart(doEl,{type:'doughnut',data:{labels:Object.keys(st.bd),datasets:[{data:Object.values(st.bd),backgroundColor:Object.keys(st.bd).map(s=>SC[s].accent),borderColor:'rgba(255,255,255,.05)',borderWidth:1,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false}}}});
+      }
+    }
+  },100);
+
+  return statsArea;
+}
+
+function renderDash(){
+  const tabs=[{id:'chat',icon:'ti-message-2',label:'Chat'},{id:'stats',icon:'ti-chart-dots',label:'Dashboard'}];
+  const topbar=h('div',{style:{display:'flex',alignItems:'center',gap:'8px',padding:'10px 16px',background:GR,borderBottom:`1px solid ${BORDER}`,flexShrink:0}},
+    h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginRight:'8px'}},
+      h('div',{style:{width:'26px',height:'26px',borderRadius:'7px',background:OR,display:'flex',alignItems:'center',justifyContent:'center'}},ic('ti-chart-dots',14,WH)),
+      h('span',{style:{color:WH,fontWeight:'500',fontSize:'13px'}},'SentimentScope'),
+    ),
+    h('div',{style:{display:'flex',gap:'2px',padding:'3px',borderRadius:'8px',background:GR2,border:`1px solid ${BORDER}`}},
+      ...tabs.map(t=>h('button',{style:{padding:'5px 12px',borderRadius:'6px',border:'none',background:S.tab===t.id?'rgba(232,93,4,.2)':'transparent',color:S.tab===t.id?OR:MUTED,fontSize:'12px',cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',fontWeight:S.tab===t.id?'500':'400',border:S.tab===t.id?`1px solid rgba(232,93,4,.3)`:'1px solid transparent'},onClick(){set({tab:t.id});}},ic(t.icon,13,S.tab===t.id?OR:MUTED),t.label)),
+    ),
+    h('div',{style:{flex:1}}),
+    h('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:'5px',padding:'4px 10px',borderRadius:'20px',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.3)'}},
+        h('div',{style:{width:'5px',height:'5px',borderRadius:'50%',background:'#22c55e',animation:'pulse 2s ease infinite'}}),
+        h('span',{style:{fontSize:'10px',color:'#22c55e',fontWeight:'500'}},'Claude AI'),
+      ),
+      h('div',{style:{width:'26px',height:'26px',borderRadius:'50%',background:'rgba(232,93,4,.15)',border:'1px solid rgba(232,93,4,.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:'500',color:OR}},S.user?.name?.[0]?.toUpperCase()||'U'),
+      h('span',{style:{fontSize:'12px',color:MUTED}},(S.user?.name||'').split(' ')[0]),
+      h('button',{style:{padding:'4px 9px',borderRadius:'6px',border:`1px solid ${BORDER}`,background:'transparent',color:MUTED,fontSize:'11px',cursor:'pointer'},onClick(){set({screen:'home',user:null,activeId:null,hist:[],tab:'chat',input:''});}}, 'Sign out'),
+    ),
+  );
+  const body=h('div',{style:{display:'flex',flex:1,overflow:'hidden'}},
+    renderSidebar(),
+    h('div',{style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}},
+      S.tab==='chat'?renderChat():renderDashStats(),
+    ),
+  );
+  return h('div',{style:{background:BK,display:'flex',flexDirection:'column',height:'640px'}},topbar,body);
+}
+
+function render(){
+  const root=document.getElementById('root');
+  root.innerHTML='';
+  if(S.screen==='home') root.appendChild(renderHome());
+  else if(S.screen==='login') root.appendChild(renderAuth(true));
+  else if(S.screen==='register') root.appendChild(renderAuth(false));
+  else root.appendChild(renderDash());
+}
+
+render();
+</script>
